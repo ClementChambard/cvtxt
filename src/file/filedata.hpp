@@ -57,4 +57,9 @@ struct CV {
   std::vector<Variable> variables;
 };
 
+extern std::string error_message;
+extern bool parsing_had_error;
+
+CV get_error_document();
+
 #endif // !FILEDATA_HPP

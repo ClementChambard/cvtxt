@@ -1,3 +1,4 @@
+#include "file/filedata.hpp"
 #include "file/parser.hpp"
 #include "render/baseshader.hpp"
 #include "render/renderbatch.hpp"
@@ -27,7 +28,14 @@ void batch_from_file(RenderBatch &batch, char const *filename) {
 
   Parser p;
 
+  parsing_had_error = false;
+  error_message.clear();
+
   CV cv = p.read_cv_file(filename);
+
+  if (parsing_had_error)
+    cv = get_error_document();
+
   cv.width = window_width;
   cv.height = window_height;
 

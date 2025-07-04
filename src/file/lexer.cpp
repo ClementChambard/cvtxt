@@ -1,4 +1,5 @@
 #include "lexer.hpp"
+#include "filedata.hpp"
 #include <cctype>
 #include <fstream>
 
@@ -64,6 +65,17 @@ Token finish_color_token(Lexer &l, char *pos) {
 
 void Lexer::enter_token(Token const &t) { cached_tokens.push_back(t); }
 
+void skip_until_newline(Lexer &l, char *pos) {
+  while (*pos != '\n' && *pos != '\r')
+    pos++;
+  // maybe allow escaping newlines with '\'
+  if (*pos == '\n' && *(pos + 1) == '\r')
+    pos++;
+  else if (*pos == '\r' && *(pos + 1) == '\n')
+    pos++;
+  l.cur_pos = pos + 1;
+}
+
 Token lex_no_cache(Lexer &l) {
   skip_whitespace(l);
   char *pos = l.cur_pos;
@@ -72,6 +84,11 @@ Token lex_no_cache(Lexer &l) {
   case '\0':
     return finish_token(l, pos, Tok::END);
   case '%':
+    if (*pos == '%') {
+      // line comment
+      skip_until_newline(l, pos + 1);
+      return lex_no_cache(l);
+    }
     return finish_token(l, pos, Tok::PERCENT);
   case '$':
     return finish_token(l, pos, Tok::DOLLAR);
@@ -106,7 +123,8 @@ Token lex_no_cache(Lexer &l) {
     if (is_identifier_start(c)) {
       return finish_ident_token(l, pos);
     }
-    // TODO: ERROR
+    parsing_had_error = true;
+    error_message += "unknown character 'c' in file\n"; // TODO: actually put character and put location
   }
   return {};
 }

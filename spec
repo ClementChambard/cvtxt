@@ -1,8 +1,34 @@
-banner_box_height = 20%;
+%%
+%% variables:
+%% 
+%% To declare a variable, use the syntax:
+%%   Variable ::= id(variable_name) '=' Value ';'
+%%
+%% A variable can be used later by preceding 
+%% variable_name by '$'
+%%
+
+banner_box_height = 28%;
 
 bg_color_light = #98cecd;
 bg_color_medium = #43868f;
 bg_color_dark = #385b5f;
+
+%%
+%% styles:
+%%
+%% Named style blocks are used to group 
+%% styling attributes together.
+%%
+%% To declare a style block, use the syntax:
+%%   StyleBlock ::= '%' 'style' id(block_name)? '=' '{' StyleAttr* '}' ';'
+%%   StyleAttr  ::= id(attr_name) '=' Value ';'
+%%
+%% A style block with no name applies to
+%% the entire document. Use the same syntax
+%% as a variable to the 'style' attribute to
+%% apply the block to a layout element.
+%%
 
 %style banner_style = {
   margin_t = 3vw;
@@ -33,6 +59,12 @@ bg_color_dark = #385b5f;
   padding_y = 3vw;
   gap = 3vw;
 };
+
+%%
+%% layouts:
+%%
+%% TODO: explain layouts
+%%
 
 %layout = layers {
   hsplit (loc = 70%) {

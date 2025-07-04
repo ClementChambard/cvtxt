@@ -2,6 +2,7 @@
 #include "filedata.hpp"
 #include <cassert>
 #include <cstring>
+#include <iostream>
 #include <optional>
 
 int parse_color_token(std::string_view value) {
@@ -111,9 +112,8 @@ void parse_vardecl(Parser &p, CV &out) {
 }
 
 void parse_style_rule(Parser &p, CV &out, Style &out_style) {
-  assert(p.tok.kind == Tok::IDENT);
   auto name = p.tok.value;
-  p.consume_token();
+  p.expect_and_consume(Tok::IDENT);
   p.expect_and_consume(Tok::EQUAL);
   auto value = parse_value(p, out);
   out_style.values[std::string(name)] = value;
@@ -244,8 +244,10 @@ bool Parser::expect_and_consume(Tok expected, std::string_view) {
     consume_token();
     return false;
   }
-  // TODO: error msg
-  assert(false);
+  error_message += "expected ...\n"; // TODO: actual error message
+  parsing_had_error = true;
+  consume_token();
+  return true;
 }
 
 void Parser::skip_until(std::span<Tok> until_toks) {
@@ -290,7 +292,9 @@ CV Parser::read_cv_file(char const *filename) {
     } else if (tok.kind == Tok::END) {
       break;
     } else {
-      // ERROR!
+      error_message += "EXPECTED '%' or id\n"; // TODO: better error message
+      parsing_had_error = true;
+      consume_token();
     }
   }
   return out;
