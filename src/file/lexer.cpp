@@ -17,8 +17,9 @@ void Lexer::open_file(char const *filename) {
   this->filename = filename;
   file_contents = read_entire_file(filename);
   file_contents += '\0';
-  cur_pos = file_contents.data();
-  end = cur_pos + file_contents.size() - 1;
+  begin = file_contents.data();
+  end = begin + file_contents.size() - 1;
+  cur_pos = begin;
 }
 
 void skip_whitespace(Lexer &l) {
@@ -28,9 +29,10 @@ void skip_whitespace(Lexer &l) {
 
 Token finish_token(Lexer &l, char *end_pos, Tok kind) {
   auto size = end_pos - l.cur_pos;
+  auto loc = Loc(l.cur_pos - l.begin);
   std::string_view data = std::string_view(l.cur_pos, size);
   l.cur_pos = end_pos;
-  return {kind, data};
+  return {kind, data, loc};
 }
 
 bool is_identifier_start(char c) {
@@ -60,33 +62,35 @@ Token finish_color_token(Lexer &l, char *pos) {
   return finish_token(l, pos, Tok::COLOR);
 }
 
-Token Lexer::lex() {
-  skip_whitespace(*this);
-  char *pos = cur_pos;
+void Lexer::enter_token(Token const &t) { cached_tokens.push_back(t); }
+
+Token lex_no_cache(Lexer &l) {
+  skip_whitespace(l);
+  char *pos = l.cur_pos;
   char c = *pos++;
   switch (c) {
   case '\0':
-    return finish_token(*this, pos, Tok::END);
+    return finish_token(l, pos, Tok::END);
   case '%':
-    return finish_token(*this, pos, Tok::PERCENT);
+    return finish_token(l, pos, Tok::PERCENT);
   case '$':
-    return finish_token(*this, pos, Tok::DOLLAR);
+    return finish_token(l, pos, Tok::DOLLAR);
   case '=':
-    return finish_token(*this, pos, Tok::EQUAL);
+    return finish_token(l, pos, Tok::EQUAL);
   case ';':
-    return finish_token(*this, pos, Tok::SEMI);
+    return finish_token(l, pos, Tok::SEMI);
   case ',':
-    return finish_token(*this, pos, Tok::COMMA);
+    return finish_token(l, pos, Tok::COMMA);
   case '(':
-    return finish_token(*this, pos, Tok::LPAREN);
+    return finish_token(l, pos, Tok::LPAREN);
   case ')':
-    return finish_token(*this, pos, Tok::RPAREN);
+    return finish_token(l, pos, Tok::RPAREN);
   case '{':
-    return finish_token(*this, pos, Tok::LBRACE);
+    return finish_token(l, pos, Tok::LBRACE);
   case '}':
-    return finish_token(*this, pos, Tok::RBRACE);
+    return finish_token(l, pos, Tok::RBRACE);
   case '#':
-    return finish_color_token(*this, pos);
+    return finish_color_token(l, pos);
   case '0':
   case '1':
   case '2':
@@ -97,30 +101,28 @@ Token Lexer::lex() {
   case '7':
   case '8':
   case '9':
-    return finish_num_token(*this, pos);
+    return finish_num_token(l, pos);
   default:
     if (is_identifier_start(c)) {
-      return finish_ident_token(*this, pos);
+      return finish_ident_token(l, pos);
     }
     // TODO: ERROR
   }
   return {};
 }
 
-#include <iostream>
+Token Lexer::lex() {
+  if (cached_tokens.size() > 0) {
+    Token out = cached_tokens.back();
+    cached_tokens.pop_back();
+    return out;
+  }
+  return lex_no_cache(*this);
+}
 
-void Token::print() {
-  if (kind == Tok::END) {
-    std::cout << "EOF";
-    return;
+Token const &Lexer::look_ahead(u32 n) {
+  for (i32 i = 0; i < i32(n) - i32(cached_tokens.size()); i++) {
+    cached_tokens.insert(cached_tokens.begin(), lex_no_cache(*this));
   }
-  if (kind == Tok::IDENT) {
-    std::cout << "ident \"" << value << '"';
-    return;
-  }
-  if (kind == Tok::IDENT) {
-    std::cout << "num \"" << value << '"';
-    return;
-  }
-  std::cout << '\'' << value << '\'';
+  return cached_tokens[cached_tokens.size() - n];
 }

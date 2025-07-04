@@ -4,16 +4,6 @@
 #include <cstring>
 #include <optional>
 
-Token &Parser::next_token() {
-  tok = l.lex();
-  return tok;
-}
-
-void expect_token(Parser &p, Tok kind) {
-  assert(p.tok.kind == kind);
-  p.next_token();
-}
-
 int parse_color_token(std::string_view value) {
   assert(value[0] == '#');
   value = value.substr(1);
@@ -83,20 +73,29 @@ Value get_variable(CV &out, std::string_view name) {
 Value parse_value(Parser &p, CV &out) {
   if (p.tok.kind == Tok::COLOR) {
     auto val = parse_color_token(p.tok.value);
-    p.next_token();
-    return {Value::COLOR, val};
+    p.consume_token();
+    return Value(Value::COLOR, i32(val));
   } else if (p.tok.kind == Tok::DOLLAR) {
-    p.next_token();
-    assert(p.tok.kind == Tok::IDENT);
+    p.consume_token();
     auto val = get_variable(out, p.tok.value);
-    p.next_token();
+    p.expect_and_consume(Tok::IDENT);
     return val;
   } else if (p.tok.kind == Tok::NUMBER) {
     // TODO: optional units
     auto val = parse_num_token(p.tok.value);
-    p.next_token();
-    expect_token(p, Tok::PERCENT);
-    return {Value::INTEGER, val};
+    auto kind = Value::NO_UNIT;
+    p.consume_token();
+    if (p.tok.kind == Tok::PERCENT) {
+      p.consume_token();
+      kind = Value::PC;
+    } else if (p.tok.kind == Tok::IDENT && p.tok.value == "vw") {
+      p.consume_token();
+      kind = Value::VW;
+    } else if (p.tok.kind == Tok::IDENT && p.tok.value == "vh") {
+      p.consume_token();
+      kind = Value::VH;
+    }
+    return Value(kind, f32(val));
   }
   // error
   return {};
@@ -104,34 +103,34 @@ Value parse_value(Parser &p, CV &out) {
 
 void parse_vardecl(Parser &p, CV &out) {
   std::string_view var_name = p.tok.value;
-  p.next_token();
-  expect_token(p, Tok::EQUAL);
+  p.expect_and_consume(Tok::IDENT);
+  p.expect_and_consume(Tok::EQUAL);
   auto value = parse_value(p, out);
   out.variables.push_back({std::string(var_name), value});
-  expect_token(p, Tok::SEMI);
+  p.expect_and_consume(Tok::SEMI);
 }
 
 void parse_style_rule(Parser &p, CV &out, Style &out_style) {
   assert(p.tok.kind == Tok::IDENT);
   auto name = p.tok.value;
-  p.next_token();
-  expect_token(p, Tok::EQUAL);
+  p.consume_token();
+  p.expect_and_consume(Tok::EQUAL);
   auto value = parse_value(p, out);
   out_style.values[std::string(name)] = value;
-  expect_token(p, Tok::SEMI);
+  p.expect_and_consume(Tok::SEMI);
 }
 
 void parse_style(Parser &p, CV &out, std::optional<std::string_view> name) {
-  expect_token(p, Tok::LBRACE);
+  p.expect_and_consume(Tok::LBRACE);
   Style s;
   while (p.tok.kind != Tok::RBRACE) {
     parse_style_rule(p, out, s);
   }
-  expect_token(p, Tok::RBRACE);
+  p.expect_and_consume(Tok::RBRACE);
   out.style.push_back(s);
   if (name) {
     out.variables.push_back(
-        {std::string(*name), {Value::STYLE, int(out.style.size() - 1)}});
+        {std::string(*name), {Value::STYLE, i32(out.style.size() - 1)}});
   }
   return;
 }
@@ -139,19 +138,17 @@ void parse_style(Parser &p, CV &out, std::optional<std::string_view> name) {
 void parse_prop_list(Parser &p, CV &out, LayoutElem &elt) {
   if (p.tok.kind == Tok::RPAREN)
     return;
-  assert(p.tok.kind == Tok::IDENT);
   auto name = p.tok.value;
-  p.next_token();
-  expect_token(p, Tok::EQUAL);
+  p.expect_and_consume(Tok::IDENT);
+  p.expect_and_consume(Tok::EQUAL);
   elt.props[std::string(name)] = parse_value(p, out);
   while (p.tok.kind == Tok::COMMA) {
-    p.next_token();
+    p.consume_token();
     if (p.tok.kind == Tok::RPAREN)
       break;
-    assert(p.tok.kind == Tok::IDENT);
     auto name = p.tok.value;
-    p.next_token();
-    expect_token(p, Tok::EQUAL);
+    p.expect_and_consume(Tok::IDENT);
+    p.expect_and_consume(Tok::EQUAL);
     elt.props[std::string(name)] = parse_value(p, out);
   }
 }
@@ -163,32 +160,31 @@ void parse_elt_list(Parser &p, CV &out, LayoutElem &elt) {
     return;
   elt.children.push_back(parse_layout_elt(p, out));
   while (p.tok.kind == Tok::COMMA) {
+    p.consume_token();
     if (p.tok.kind == Tok::RBRACE)
       break;
-    p.next_token();
     elt.children.push_back(parse_layout_elt(p, out));
   }
 }
 
 LayoutElem parse_layout_elt(Parser &p, CV &out) {
   LayoutElem elt;
-  assert(p.tok.kind == Tok::IDENT);
   elt.kind = p.tok.value;
+  p.expect_and_consume(Tok::IDENT);
   elt.name = std::nullopt;
-  p.next_token();
   if (p.tok.kind == Tok::IDENT) {
     elt.name = p.tok.value;
-    p.next_token();
+    p.consume_token();
   }
   if (p.tok.kind == Tok::LPAREN) {
-    p.next_token();
+    p.consume_token();
     parse_prop_list(p, out, elt);
-    expect_token(p, Tok::RPAREN);
+    p.expect_and_consume(Tok::RPAREN);
   }
   if (p.tok.kind == Tok::LBRACE) {
-    p.next_token();
+    p.consume_token();
     parse_elt_list(p, out, elt);
-    expect_token(p, Tok::RBRACE);
+    p.expect_and_consume(Tok::RBRACE);
   }
   return elt;
 }
@@ -202,29 +198,81 @@ void parse_layout(Parser &p, CV &out, std::optional<std::string_view> name) {
 }
 
 void parse_pcdecl(Parser &p, CV &out) {
-  auto tok = p.next_token();
-  assert(tok.kind == Tok::IDENT);
-  p.next_token();
+  p.expect_and_consume(Tok::PERCENT);
+  auto tok = p.tok;
+  p.expect_and_consume(Tok::IDENT);
   std::optional<std::string_view> name = std::nullopt;
   if (p.tok.kind == Tok::IDENT) {
     name = p.tok.value;
-    p.next_token();
+    p.consume_token();
   }
-  expect_token(p, Tok::EQUAL);
-  if (tok.value == "format") {
-    // TODO:
-    while (p.tok.kind != Tok::SEMI)
-      p.next_token();
-    expect_token(p, Tok::SEMI);
-    return;
-  } else if (tok.value == "style") {
+  p.expect_and_consume(Tok::EQUAL);
+  if (tok.value == "style") {
     parse_style(p, out, name);
   } else if (tok.value == "layout") {
     parse_layout(p, out, name);
   } else {
     // ERROR
   }
-  expect_token(p, Tok::SEMI);
+  p.expect_and_consume(Tok::SEMI);
+}
+
+void Parser::unconsume_token(Token const &t) {
+  auto next_tok = tok;
+  l.enter_token(t);
+  tok = l.lex();
+  l.enter_token(next_tok);
+}
+
+Loc Parser::consume_token() {
+  prev_tok_location = tok.loc;
+  tok = l.lex();
+  return prev_tok_location;
+}
+
+bool Parser::try_consume_token(Tok expected, Loc *loc_ptr) {
+  if (tok.kind != expected)
+    return false;
+  auto loc = consume_token();
+  if (loc_ptr)
+    *loc_ptr = loc;
+  return true;
+}
+
+bool Parser::expect_and_consume(Tok expected, std::string_view) {
+  if (tok.kind == expected) {
+    consume_token();
+    return false;
+  }
+  // TODO: error msg
+  assert(false);
+}
+
+void Parser::skip_until(std::span<Tok> until_toks) {
+  while (true) {
+    for (auto t : until_toks) {
+      if (tok.kind == t) {
+        // if !stop_before_match consume_token()
+        return;
+      }
+    }
+    switch (tok.kind) {
+    case Tok::END:
+      return;
+    case Tok::LPAREN:
+      consume_token();
+      skip_until(Tok::RPAREN);
+      consume_token();
+      break;
+    case Tok::LBRACE:
+      consume_token();
+      skip_until(Tok::RBRACE);
+      consume_token();
+      break;
+    default:
+      consume_token();
+    }
+  }
 }
 
 CV Parser::read_cv_file(char const *filename) {
