@@ -1,0 +1,52 @@
+tokens:
+  id: [a-zA-Z_][a-zA-Z_0-9]*
+  num: [0-9]+
+  '%'
+  '='
+  ';'
+  ','
+  '('
+  ')'
+  '{'
+  '}'
+
+File ::= List<Decl> $
+       ;
+
+Decl ::= PCDecl
+       | VarDecl
+       ;
+
+VarDecl ::= id '=' Value ';'
+          ;
+
+Value ::= num Option<unit>
+        | '$' id
+        | id
+        ;
+
+PCDecl ::= '%' "format" '=' FormatDecl ';'
+         | '%' "style" Option<id> '=' StyleDecl ';'
+         | '%' "layout" Option<id> '=' LayoutElem ';'
+         ;
+
+FormatDecl ::= "A4" "portrait"
+             ;
+
+StyleDecl ::= '{' List<StyleValue> '}'
+            ;
+
+StyleValue ::= id '=' Value ';'
+             ;
+
+LayoutElem ::= id Option<id> Option<LayoutElemArgs> Option<LayoutElemChildren>
+             ;
+
+LayoutElemArgs ::= '(' SepList<LayoutElemArg, ','> ')'
+                 ;
+
+LayoutElemArg ::= id '=' Value
+                ;
+
+LayoutElemChildren ::= '{' SepList<LayoutElem, ','> '}'
+                     ;
