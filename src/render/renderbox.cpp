@@ -66,6 +66,9 @@ RenderBox::RenderBox(LayoutElem const &elt, CV const &cv) {
   } else if (elt.kind == "column") {
     children_mode = COLUMN;
     assign_props(*this, elt, cv);
+  } else if (elt.kind == "row") {
+    children_mode = ROW;
+    assign_props(*this, elt, cv);
   } else if (elt.kind == "hsplit") {
     children_mode = ROW;
     assign_props(*this, elt, cv);
@@ -74,6 +77,14 @@ RenderBox::RenderBox(LayoutElem const &elt, CV const &cv) {
     assert(loc_prop.kind == Value::PC);
     children[0].width = loc_prop;
     children[1].width = Value(Value::PC, 100.f - loc_prop.val);
+  } else if (elt.kind == "vsplit") {
+    children_mode = COLUMN;
+    assign_props(*this, elt, cv);
+    assert(children.size() == 2);
+    auto loc_prop = elt.get_prop("loc", Value(Value::PC, 50.f));
+    assert(loc_prop.kind == Value::PC);
+    children[0].height = loc_prop;
+    children[1].height = Value(Value::PC, 100.f - loc_prop.val);
   }
 }
 
